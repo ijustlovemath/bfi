@@ -15,10 +15,29 @@ void do_fsm(const char *prgm, unsigned char **dp, unsigned char **pc)
   fprintf(stderr, #b_ ": '%c', %02x\n", b_, b_);\
   } while(0)
 
+/**
+ * starting at program counter, look in direction for matching
+ * branch character, accounting for nested loops.
+ * needs to have a check for overrunning past program text, in case of
+ * unmatched braces
+ */
+#define BRANCH_CASE(branch_char, matched_char, direction, dp_negation) \
+    case branch_char:\
+        if(dp_negation **dp) {\
+            loop_level++; \
+            while(loop_level) {\
+                (*pc) += direction;\
+                working_byte = **pc;\
+                if(working_byte == branch_char)\
+                    loop_level++;\
+                if(working_byte == matched_char)\
+                    loop_level--;\
+            }\
+        }\
+        break;
+
 	int loop_level = 0;
 	int working_byte = 0;
-	char printer[2] = {0};
-	print_byte(**pc);
 
 	switch(**pc) {
 	case '>':
@@ -34,45 +53,14 @@ void do_fsm(const char *prgm, unsigned char **dp, unsigned char **pc)
 		(**dp)--;
 		break;
 	case '.':
-		*printer = **dp;
-        puts(printer);
+        putchar(**dp);
 		break;
 	case ',':
 		**dp = getchar();
 		break;
-	case '[':
-		if(!**dp) {
-			loop_level++;
-			while(loop_level) {
-				(*pc)++;
-				working_byte = **pc;
-				if(working_byte == '[')
-					loop_level++;
-				if(working_byte == ']')
-					loop_level--;
-			}
-		}
-		break;
-	case ']':
-		if(**dp) {
-			loop_level++;
-			while(loop_level) {
-				(*pc)--;
-				working_byte = **pc;
-                print_byte(working_byte);
-                fprintf(stderr, "loop_level: %d\n", loop_level);
-				if(working_byte == ']') {
-					loop_level++;
-                }
-				if(working_byte == '[') {
-					loop_level--;
-                }
-			}
-		}
-		break;
-
-	default:
-		die("unrecognized instruction");
+    BRANCH_CASE('[', ']',  1,  !)
+    BRANCH_CASE(']', '[', -1, !!)
+	default:;
 	}
 }
 
@@ -85,21 +73,62 @@ void cpy(unsigned char *dst, unsigned char *src, unsigned int len)
 
 #define dbg(pc, dp, prgm) printf("pc %08x; dp %08x; *dp %02x '%c'\n", OFST(pc,prgm), OFST(dp,prgm), *dp, (char) 'x')
 
-int main(void)
+#undef dbg
+#define dbg(...)
+
+void run(unsigned char *prgm)
 {
-	unsigned char prgm [WORKSPACE_SIZE] = {0};
 	unsigned char data[WORKSPACE_SIZE] = {0};
 	unsigned char *dp = data;
 	unsigned char *pc = prgm;
-
-	cpy(prgm, ">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+.", 164);
 
 	dbg(pc, dp, prgm);
 	while(pc >= prgm && pc < prgm + WORKSPACE_SIZE && *pc) {
 		do_fsm(prgm, &dp, &pc);
 		dbg(pc, dp, prgm);
-
 		pc++;
-        dbg(pc, dp, prgm);
 	}
+}
+
+void xcpy(unsigned char *dest, const char *src)
+{
+    unsigned int len = 0;
+    for(; len < WORKSPACE_SIZE && *src; *dest = *src, src++, dest++, len++);
+}
+
+int main(void)
+{
+	unsigned char prgm [WORKSPACE_SIZE] = {0};
+
+    
+	// Hello, World!
+    xcpy(prgm, ">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+.");
+
+	// Game of Life
+	xcpy(prgm, ">>>->+>+++++>(++++++++++)[[>>>+<<<-]>+++++>+>>+[<<+>>>>>+<<<-]<-]>>>>[\n"
+"  [>>>+>+<<<<-]+++>>+[<+>>>+>+<<<-]>>[>[[>>>+<<<-]<]<<++>+>>>>>>-]<-\n"
+"]+++>+>[[-]<+<[>+++++++++++++++++<-]<+]>>[\n"
+"  [+++++++++.-------->>>]+[-<<<]>>>[>>,----------[>]<]<<[\n"
+"    <<<[\n"
+"      >--[<->>+>-<<-]<[[>>>]+>-[+>>+>-]+[<<<]<-]>++>[<+>-]\n"
+"      >[[>>>]+[<<<]>>>-]+[->>>]<-[++>]>[------<]>+++[<<<]>\n"
+"    ]<\n"
+"  ]>[\n"
+"    -[+>>+>-]+>>+>>>+>[<<<]>->+>[\n"
+"      >[->+>+++>>++[>>>]+++<<<++<<<++[>>>]>>>]<<<[>[>>>]+>>>]\n"
+"      <<<<<<<[<<++<+[-<<<+]->++>>>++>>>++<<<<]<<<+[-<<<+]+>->>->>\n"
+"    ]<<+<<+<<<+<<-[+<+<<-]+<+[\n"
+"      ->+>[-<-<<[<<<]>[>>[>>>]<<+<[<<<]>-]]\n"
+"      <[<[<[<<<]>+>>[>>>]<<-]<[<<<]]>>>->>>[>>>]+>\n"
+"    ]>+[-<<[-]<]-[\n"
+"      [>>>]<[<<[<<<]>>>>>+>[>>>]<-]>>>[>[>>>]<<<<+>[<<<]>>-]>\n"
+"    ]<<<<<<[---<-----[-[-[<->>+++<+++++++[-]]]]<+<+]>\n"
+"  ]>>\n"
+"]");	
+    // Sierpinski
+    //xcpy(prgm, "++++++++[>+>++++<<-]>++>>+<[-[>>+<<-]+>>]>+[-<<<[->[+[-]+>++>>>-<<]<[<]>>++++++[<<+++++>>-]+<<++.[-]<<]>.>+[>>]>+]");
+
+	//xcpy(prgm, ">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+.");
+    run(prgm);
+    return 0;
 }
