@@ -88,6 +88,10 @@ void cpy(unsigned char *dst, unsigned char *src, unsigned int len)
 
 #define BOUNDED_BY(start, ptr, end) ((ptr >= start) && (ptr < end))
 
+#define WARN_UNBOUNDED(start, ptr, end) do {\
+if(!BOUNDED_BY(start, ptr, end)) puts("[WARNING] " #ptr " has stepped outside its allowed bounds!");\
+   } while(0)
+
 void run(const char *prgm)
 {
 	unsigned char data[WORKSPACE_SIZE] = {0};
@@ -100,6 +104,8 @@ void run(const char *prgm)
 		dbg(pc, dp, prgm);
 		pc++;
 	}
+    WARN_UNBOUNDED(prgm, pc, prgm+WORKSPACE_SIZE);
+    WARN_UNBOUNDED(data, dp, data+WORKSPACE_SIZE);
 }
 
 void xcpy(char *dest, const char *src)
@@ -146,5 +152,6 @@ int main(void)
 
     // For now, just run a simple "Hello, World!" program every time.
 	run(">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+.");
+    run("[[["); // should segfault
     return 0;
 }
