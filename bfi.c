@@ -1,12 +1,13 @@
 /* brainfuck interpreter */
 #include <stdio.h>
+#include <stdlib.h> /* exit() */
 
 #define WORKSPACE_SIZE (65535)
 
 void die(const char *msg)
 {
 	puts(msg);
-	int x = *(int *)0;
+    exit(-1);
 }
 
 /**
@@ -16,7 +17,7 @@ void die(const char *msg)
  * pc is similar, it's a pointer to the program counter, which we use to index
  * into the program text itself.
  */
-void do_fsm(unsigned char **dp, const char **pc)
+void do_fsm(const char * const prgm, unsigned char **dp, const char **pc)
 {
 #define print_byte(b_) do {\
   fprintf(stderr, #b_ ": '%c', %02x\n", b_, b_);\
@@ -35,13 +36,17 @@ void do_fsm(unsigned char **dp, const char **pc)
     case branch_char:\
         if(dp_negation **dp) {\
             loop_level++; \
-            while(loop_level) {\
+            while(loop_level && **pc && *pc >= prgm) {\
                 (*pc) += direction;\
                 working_byte = **pc;\
                 if(working_byte == branch_char)\
                     loop_level++;\
                 if(working_byte == matched_char)\
                     loop_level--;\
+            }\
+            if(loop_level || *pc < prgm) {\
+                fprintf(stderr, "Syntax error: There are %d (or more) unmatched %c's in the provided program\n", loop_level, branch_char);\
+                die("bailing out...");\
             }\
         }\
         break;
@@ -64,6 +69,7 @@ void do_fsm(unsigned char **dp, const char **pc)
 		break;
 	case '.':
         putchar(**dp);
+        fflush(stdout);
 		break;
 	case ',':
 		**dp = getchar();
@@ -100,7 +106,7 @@ void run(const char *prgm)
 
 	dbg(pc, dp, prgm);
 	while(BOUNDED_BY(prgm, pc, prgm + WORKSPACE_SIZE) && BOUNDED_BY(data, dp, data + WORKSPACE_SIZE) && *pc) {
-		do_fsm(&dp, &pc);
+		do_fsm(prgm, &dp, &pc);
 		dbg(pc, dp, prgm);
 		pc++;
 	}
@@ -153,5 +159,6 @@ int main(void)
     // For now, just run a simple "Hello, World!" program every time.
 	run(">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+.");
     run("[[["); // should segfault
+//    run("]]");
     return 0;
 }
